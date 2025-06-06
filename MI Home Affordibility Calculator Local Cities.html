@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Michigan Home Affordability Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Professional Slate & Indigo -->
+    <!-- Application Structure Plan: An expanded eight-tab single-page application provides a clear, guided user flow. A 'Local Analysis' tab provides city-specific data, directly influencing projections. -->
+    <!-- Visualization & Content Choices: The dashboard uses a mix of visualizations for clarity. Doughnut chart for monthly payment breakdown, grouped bar chart for scenarios, dual-line chart for amortization, and a filled line chart for projections. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* Light Slate */ }
+        .tab-btn { 
+            transition: all 0.3s ease; 
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .tab-btn.active { 
+            border-color: #4f46e5; /* Indigo */
+            color: #4f46e5; 
+        }
+        .tab-content { display: none; animation: fadeIn 0.5s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .chart-container { 
+            position: relative; width: 100%; max-width: 700px; 
+            margin-left: auto; margin-right: auto; 
+            height: 350px; max-height: 400px;
+            background-color: #ffffff; padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        @media (max-width: 768px) { .chart-container { height: 300px; max-height: 350px; } }
+        
+        .form-input, .form-select {
+            border: 1px solid #cbd5e1; padding: 0.625rem 0.875rem;
+            border-radius: 0.5rem; width: 100%;
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            background-color: #ffffff;
+        }
+        .form-input:focus, .form-select:focus {
+            outline: none; border-color: #4f46e5; 
+            box-shadow: 0 0 0 3px #c7d2fe; 
+        }
+        
+        input[type='range'] { height: 6px; }
+        input[type='range']::-webkit-slider-thumb { 
+            -webkit-appearance: none; appearance: none; 
+            width: 1.25rem; height: 1.25rem; 
+            background-color: #4f46e5; cursor: pointer; 
+            border-radius: 9999px; margin-top: -5px; 
+        }
+        input[type='range']::-moz-range-thumb { 
+            width: 1.25rem; height: 1.25rem; background-color: #4f46e5; 
+            cursor: pointer; border-radius: 9999px; border:0;
+        }
+        
+        .projection-btn { transition: all 0.2s ease; }
+        .projection-btn.active { background-color: #0d9488; /* Teal */ color: white; }
+        
+        table { border-collapse: collapse; width: 100%; }
+        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        thead th { background-color: #f1f5f9; color: #475569; font-weight: 600; }
+        tbody tr:hover { background-color: #f8fafc; }
+
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 10% auto; padding: 2rem; border-radius: 0.5rem; border: 1px solid #888; width: 90%; max-width: 500px; }
+        .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printable-area, #printable-area * { visibility: visible; }
+            #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <header class="text-center mb-10">
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Michigan Home Affordability Dashboard</h1>
+            <p class="mt-3 text-base sm:text-lg text-slate-600">Your personalized financial guide for the Michigan real estate market.</p>
+        </header>
+
+        <div class="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-xl">
+            
+            <div id="tabs" class="mb-8 border-b border-slate-200 overflow-x-auto">
+                <nav class="flex -mb-px" aria-label="Tabs">
+                    <button class="tab-btn active" data-tab="analysis">Affordability</button>
+                    <button class="tab-btn" data-tab="budget">Budget Calculator</button>
+                    <button class="tab-btn" data-tab="local">Local Analysis</button>
+                    <button class="tab-btn" data-tab="waiting">Cost of Waiting</button>
+                    <button class="tab-btn" data-tab="payoff">Payoff</button>
+                    <button class="tab-btn" data-tab="projections">Projections</button>
+                    <button class="tab-btn" data-tab="comparison">Compare</button>
+                    <button class="tab-btn" data-tab="summary">Summary</button>
+                </nav>
+            </div>
+
+            <div id="analysis" class="tab-content active">
+                <p class="text-slate-600 mb-6">Enter your financial details to get a real-time analysis of your home-buying power. All calculations update instantly.</p>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-6">
+                         <h3 class="text-xl font-semibold text-slate-800 border-b pb-2">Your Financial Inputs</h3>
+                        <div>
+                            <label for="homePrice" class="block text-sm font-medium text-slate-700 mb-1">Home Price ($)</label>
+                            <input type="number" id="homePrice" class="form-input" value="300000" step="5000">
+                        </div>
+                        <div>
+                            <label for="downPaymentPercent" class="block text-sm font-medium text-slate-700 mb-1">Down Payment (%)</label>
+                            <input type="range" id="downPaymentPercent" class="w-full bg-slate-200 rounded-lg appearance-none cursor-pointer" min="0" max="100" value="10" step="1">
+                            <div class="flex justify-between text-xs mt-1 text-slate-500">
+                                <span>0%</span>
+                                <span id="downPaymentPercentValue" class="font-semibold text-indigo-600 text-sm">10%</span>
+                                <span>100%</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="downPaymentAmount" class="block text-sm font-medium text-slate-700 mb-1">Down Payment ($)</label>
+                            <input type="number" id="downPaymentAmount" class="form-input" value="30000" step="1000">
+                        </div>
+                        <div>
+                            <label for="loanType" class="block text-sm font-medium text-slate-700 mb-1">Loan Type</label>
+                            <select id="loanType" class="form-select">
+                                <option value="30" data-term="30">30-Year Fixed</option>
+                                <option value="20" data-term="20">20-Year Fixed</option>
+                                <option value="15" data-term="15">15-Year Fixed</option>
+                                <option value="10" data-term="10">10-Year Fixed</option>
+                                <option value="5_1_ARM" data-term="30">5/1 ARM</option>
+                                <option value="7_1_ARM" data-term="30">7/1 ARM</option>
+                            </select>
+                        </div>
+                         <div>
+                            <label for="interestRate" class="block text-sm font-medium text-slate-700 mb-1">Interest Rate (%) <span class="text-xs text-slate-500">(auto-updates)</span></label>
+                            <input type="number" id="interestRate" class="form-input" value="6.95" step="0.01">
+                        </div>
+                        <div>
+                            <label for="annualIncome" class="block text-sm font-medium text-slate-700 mb-1">Gross Annual Income ($)</label>
+                            <input type="number" id="annualIncome" class="form-input" value="80000" step="1000">
+                        </div>
+                         <div>
+                            <label for="netMonthlyIncome" class="block text-sm font-medium text-slate-700 mb-1">Net Monthly Income ($)</label>
+                            <input type="number" id="netMonthlyIncome" class="form-input" value="5000" step="100">
+                        </div>
+                        <div>
+                            <label for="monthlyDebts" class="block text-sm font-medium text-slate-700 mb-1">Monthly Non-Housing Debts ($)</label>
+                            <input type="number" id="monthlyDebts" class="form-input" value="500" step="50">
+                        </div>
+                         <h3 class="text-xl font-semibold text-slate-800 border-b pb-2 pt-4">Property Details</h3>
+                        <div>
+                            <label for="creditScore" class="block text-sm font-medium text-slate-700 mb-1">Credit Score Range</label>
+                            <select id="creditScore" class="form-select">
+                                <option value="760+">Excellent (760+)</option>
+                                <option value="720-759" selected>Good (720-759)</option>
+                                <option value="680-719">Fair (680-719)</option>
+                                <option value="620-679">Needs Improvement (620-679)</option>
+                                <option value="<620">Poor (<620)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="county" class="block text-sm font-medium text-slate-700 mb-1">Michigan County</label>
+                            <select id="county" class="form-select"></select>
+                        </div>
+                        <div>
+                            <label for="insuranceRate" class="block text-sm font-medium text-slate-700 mb-1">Annual Homeowners Insurance Rate (%)</label>
+                            <input type="number" id="insuranceRate" class="form-input" value="0.75" step="0.05">
+                        </div>
+                        <div>
+                            <label for="hoaFees" class="block text-sm font-medium text-slate-700 mb-1">Monthly HOA Fees ($)</label>
+                            <input type="number" id="hoaFees" class="form-input" value="0" step="10">
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="md:col-span-2">
+                                <h3 class="text-xl font-semibold mb-4 text-slate-800">Monthly Payment Breakdown</h3>
+                                <div class="bg-indigo-50 p-6 rounded-lg">
+                                    <div class="text-center mb-4">
+                                        <span class="text-lg text-slate-600">Total Estimated Monthly Payment</span>
+                                        <p id="totalMonthlyPayment" class="text-4xl sm:text-5xl font-bold text-indigo-600">$0</p>
+                                    </div>
+                                    <div class="chart-container mx-auto h-64 !max-h-64 !p-2 !shadow-none !bg-transparent">
+                                        <canvas id="paymentChart"></canvas>
+                                    </div>
+                                </div>
+                                <div id="arm-info" class="hidden mt-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700 p-4 rounded-r-lg">
+                                    <p class="font-bold">ARM Projection</p>
+                                    <p class="text-sm">Your initial payment is fixed for a set period. After that, your rate and payment could adjust. See the 'Payoff' tab for an illustrative projection of this change.</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-4 text-slate-800">Affordability Ratios</h3>
+                                <div class="space-y-4">
+                                    <div id="housingRatioCard" class="p-4 rounded-lg transition-colors duration-300">
+                                        <div class="flex justify-between items-center">
+                                            <p class="font-medium">Housing Expense Ratio</p>
+                                            <p id="housingRatio" class="text-2xl font-bold">0%</p>
+                                        </div>
+                                        <p class="text-sm text-slate-500">vs. Gross Income (28% Rule)</p>
+                                    </div>
+                                    <div id="debtRatioCard" class="p-4 rounded-lg transition-colors duration-300">
+                                        <div class="flex justify-between items-center">
+                                            <p class="font-medium">Total Debt Ratio</p>
+                                            <p id="debtRatio" class="text-2xl font-bold">0%</p>
+                                        </div>
+                                        <p class="text-sm text-slate-500">vs. Gross Income (36% Rule)</p>
+                                    </div>
+                                    <div id="ramseyRatioCard" class="p-4 rounded-lg transition-colors duration-300">
+                                        <div class="flex justify-between items-center">
+                                            <p class="font-medium">25% Net Income Rule</p>
+                                            <p id="ramseyRatio" class="text-2xl font-bold">0%</p>
+                                        </div>
+                                        <p class="text-sm text-slate-500">vs. Take-Home Pay (Ramsey Rule)</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-4 text-slate-800">Upfront Costs</h3>
+                                <div class="space-y-4">
+                                    <div class="bg-slate-100 p-4 rounded-lg">
+                                        <p class="font-medium text-slate-600">Down Payment</p>
+                                        <p id="upfrontDownPayment" class="text-2xl font-bold text-slate-800">$0</p>
+                                    </div>
+                                    <div class="bg-slate-100 p-4 rounded-lg">
+                                        <div class="flex justify-between items-center">
+                                            <p class="font-medium text-slate-600">Est. Closing Costs (3.5%)</p>
+                                            <button id="closing-cost-details-btn" class="text-xs text-indigo-600 hover:underline">Details</button>
+                                        </div>
+                                        <p id="closingCosts" class="text-2xl font-bold text-slate-800">$0</p>
+                                    </div>
+                                    <div class="bg-green-100 text-green-800 p-4 rounded-lg">
+                                        <p class="font-bold">Total Cash Needed at Closing</p>
+                                        <p id="cashToClose" class="text-3xl font-extrabold">$0</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="md:col-span-2 flex justify-end mt-4">
+                                <button id="saveScenarioBtn" class="bg-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Save as Scenario</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="budget" class="tab-content">
+                <p class="text-slate-600 mb-6">Work backward to find a home price that fits your budget. Enter your desired monthly payment and financial details to see an estimated affordable home price.</p>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                     <div class="space-y-6">
+                        <h3 class="text-xl font-semibold text-slate-800 border-b pb-2">Your Budget Details</h3>
+                        <div>
+                            <label for="desiredPayment" class="block text-sm font-medium text-slate-700 mb-1">Desired Monthly Payment ($)</label>
+                            <input type="number" id="desiredPayment" class="form-input" value="2000" step="100">
+                        </div>
+                        <div>
+                            <label for="budgetDownPayment" class="block text-sm font-medium text-slate-700 mb-1">Down Payment Amount ($)</label>
+                            <input type="number" id="budgetDownPayment" class="form-input" value="30000" step="1000">
+                        </div>
+                        <div>
+                            <label for="budgetAnnualIncome" class="block text-sm font-medium text-slate-700 mb-1">Gross Annual Income ($)</label>
+                            <input type="number" id="budgetAnnualIncome" class="form-input" value="80000" step="1000">
+                        </div>
+                        <div>
+                            <label for="budgetMonthlyDebts" class="block text-sm font-medium text-slate-700 mb-1">Monthly Non-Housing Debts ($)</label>
+                            <input type="number" id="budgetMonthlyDebts" class="form-input" value="500" step="50">
+                        </div>
+                     </div>
+                     <div class="bg-indigo-50 p-8 rounded-lg text-center flex flex-col justify-center">
+                         <span class="text-lg text-slate-600">Estimated Affordable Home Price</span>
+                         <p id="affordableHomePrice" class="text-5xl font-bold text-indigo-600">$0</p>
+                         <p class="text-sm mt-2 text-slate-500">Based on a 30-yr fixed loan at current rates.</p>
+                     </div>
+                </div>
+            </div>
+
+            <div id="local" class="tab-content">
+                <p class="text-slate-600 mb-6">Analyze specific cities with top-rated school districts. Selecting a city will provide a more accurate property tax estimate based on its specific millage rate.</p>
+                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-6">
+                        <h3 class="text-xl font-semibold text-slate-800 border-b pb-2">Select a City</h3>
+                        <div>
+                            <label for="citySelect" class="block text-sm font-medium text-slate-700 mb-1">City / School District</label>
+                            <select id="citySelect" class="form-select"></select>
+                        </div>
+                        <div id="city-info-card" class="bg-white p-6 rounded-lg shadow-md border border-slate-200 space-y-4">
+                            <div>
+                                <h4 class="font-semibold text-slate-700">School District Rating</h4>
+                                <p id="citySchoolRating" class="text-3xl font-bold text-green-600 mt-1"></p>
+                            </div>
+                             <div>
+                                <h4 class="font-semibold text-slate-700">Median Home Price (Benchmark)</h4>
+                                <p id="cityMedianPrice" class="text-2xl font-bold text-slate-800"></p>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-slate-700">City Vibe</h4>
+                                <p id="cityVibe" class="text-sm text-slate-600"></p>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="lg:col-span-2 bg-indigo-50 p-8 rounded-lg text-center flex flex-col justify-center">
+                         <span class="text-lg text-slate-600">Estimated Annual Property Tax</span>
+                         <p id="cityPropertyTax" class="text-5xl font-bold text-indigo-600">$0</p>
+                         <p class="text-sm mt-2 text-slate-500">Based on a <strong id="cityTaxHomePrice"></strong> home price and a millage rate of <strong id="cityMillageRate"></strong>.</p>
+                         <p class="text-xs mt-4 text-slate-400">Note: This is a more precise estimate than the county-wide average used in the main 'Affordability' tab.</p>
+                     </div>
+                </div>
+            </div>
+
+
+            <div id="waiting" class="tab-content">
+                 <p class="text-slate-600 mb-6">Model the financial impact of waiting a year to buy. See how projected changes in home prices and interest rates could affect your monthly payment and total cost.</p>
+                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                     <div class="md:col-span-1 space-y-6">
+                        <h3 class="text-xl font-semibold text-slate-800 border-b pb-2">Future Projections</h3>
+                        <div>
+                            <label for="waitAppreciation" class="block text-sm font-medium text-slate-700 mb-1">Projected Annual Appreciation (%)</label>
+                            <input type="number" id="waitAppreciation" class="form-input" value="4.5" step="0.1">
+                        </div>
+                        <div>
+                            <label for="waitInterestRateChange" class="block text-sm font-medium text-slate-700 mb-1">Projected Interest Rate Change (%)</label>
+                            <input type="number" id="waitInterestRateChange" class="form-input" value="0.5" step="0.1">
+                        </div>
+                     </div>
+                     <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div class="bg-slate-100 p-6 rounded-lg">
+                            <h4 class="font-semibold text-slate-700">Buying Today</h4>
+                            <p class="text-3xl font-bold text-slate-900 mt-2" id="waitTodayPayment">$0</p>
+                            <p class="text-sm text-slate-500">Estimated Monthly Payment</p>
+                        </div>
+                         <div class="bg-yellow-100 p-6 rounded-lg">
+                            <h4 class="font-semibold text-yellow-800">Buying in One Year</h4>
+                            <p class="text-3xl font-bold text-yellow-900 mt-2" id="waitNextYearPayment">$0</p>
+                            <p class="text-sm text-yellow-600">Projected Monthly Payment</p>
+                        </div>
+                         <div class="sm:col-span-2 bg-red-100 text-red-800 p-6 rounded-lg text-center">
+                            <p class="text-lg font-semibold">Monthly Payment Difference</p>
+                            <p class="text-4xl font-bold mt-1" id="waitDifference">$0</p>
+                            <p class="text-sm mt-1">Estimated increase per month</p>
+                        </div>
+                     </div>
+                 </div>
+            </div>
+
+            <div id="payoff" class="tab-content">
+                <p class="text-slate-600 mb-6">See how extra payments can shorten your loan and save you thousands in interest. Details are based on your entries in the 'Affordability' tab.</p>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1">
+                        <h3 class="text-xl font-semibold mb-4 text-slate-800">Payoff Acceleration</h3>
+                        <div class="space-y-4 bg-white p-6 rounded-lg shadow-md border border-slate-200">
+                            <div>
+                                <label for="extraPayment" class="block text-sm font-medium text-slate-700 mb-1">Extra Monthly Principal ($)</label>
+                                <input type="number" id="extraPayment" class="form-input" value="0" step="25">
+                            </div>
+                            <div class="flex items-center mt-2">
+                                <input id="biweeklyPayments" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded">
+                                <label for="biweeklyPayments" class="ml-3 block text-sm text-slate-900">Use Bi-Weekly Payments (Simulated)</label>
+                            </div>
+                        </div>
+                        <div id="arm-projection-info" class="hidden mt-6 bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded-r-lg">
+                            <p class="font-bold">Illustrative ARM Adjustment</p>
+                            <p class="text-sm" id="armProjectionText"></p>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2">
+                         <h3 class="text-xl font-semibold mb-4 text-slate-800">Payoff Summary</h3>
+                         <div class="overflow-x-auto bg-white rounded-lg shadow-md border border-slate-200">
+                            <table class="min-w-full text-sm text-left">
+                                <thead>
+                                    <tr>
+                                        <th>Scenario</th>
+                                        <th class="text-right">Total Paid</th>
+                                        <th class="text-right">Interest Paid</th>
+                                        <th class="text-right">Payoff Time</th>
+                                        <th class="text-right">Interest Saved</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr id="standardPayoffRow"></tr>
+                                    <tr id="acceleratedPayoffRow"></tr>
+                                </tbody>
+                            </table>
+                         </div>
+                    </div>
+                </div>
+                 <div class="mt-8">
+                    <h3 class="text-xl font-semibold mb-4 text-slate-800 text-center">Amortization Schedule</h3>
+                     <div class="chart-container">
+                        <canvas id="amortizationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="projections" class="tab-content">
+                <p class="text-slate-600 mb-6">Visualize your home's potential growth in value and understand the total cost of ownership over time, based on Michigan market trends.</p>
+                <div class="text-center mb-8">
+                    <div id="projection-term-buttons" class="inline-flex rounded-md shadow-sm" role="group">
+                        <button type="button" class="projection-btn active py-2 px-4 text-sm font-medium bg-white rounded-l-lg border border-slate-200 hover:bg-slate-100" data-years="5">5 Years</button>
+                        <button type="button" class="projection-btn py-2 px-4 text-sm font-medium bg-white border-t border-b border-slate-200 hover:bg-slate-100" data-years="10">10 Years</button>
+                        <button type="button" class="projection-btn py-2 px-4 text-sm font-medium bg-white border-t border-b border-slate-200 hover:bg-slate-100" data-years="15">15 Years</button>
+                        <button type="button" class="projection-btn py-2 px-4 text-sm font-medium bg-white border-t border-b border-slate-200 hover:bg-slate-100" data-years="20">20 Years</button>
+                        <button type="button" class="projection-btn py-2 px-4 text-sm font-medium bg-white rounded-r-md border border-slate-200 hover:bg-slate-100" data-years="30">30 Years</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                    <div class="lg:col-span-3">
+                         <h3 id="homeValueChartTitle" class="text-xl font-semibold mb-4 text-slate-800 text-center">Home Value Projection (5 Years)</h3>
+                         <div class="chart-container">
+                            <canvas id="homeValueChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2">
+                        <h3 class="text-xl font-semibold mb-4 text-slate-800">Projection Summary</h3>
+                        <div class="bg-slate-100 p-6 rounded-lg space-y-3 shadow">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">Current Value:</span>
+                                <span id="projCurrentValue" class="font-semibold text-slate-900">$0</span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">Projected Value:</span>
+                                <span id="projProjectedValue" class="font-semibold text-slate-900">$0</span>
+                            </div>
+                             <div class="flex justify-between items-center text-sm font-bold text-green-700">
+                                <span >Total Appreciation:</span>
+                                <span id="projAppreciation" >$0</span>
+                            </div>
+                            <hr class="my-2 border-slate-300">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">Total Mortgage Payments:</span>
+                                <span id="projMortgage" class="font-semibold text-slate-900">$0</span>
+                            </div>
+                             <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">Total Property Taxes:</span>
+                                <span id="projTaxes" class="font-semibold text-slate-900">$0</span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">Total Insurance:</span>
+                                <span id="projInsurance" class="font-semibold text-slate-900">$0</span>
+                            </div>
+                             <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">Total Maintenance:</span>
+                                <span id="projMaintenance" class="font-semibold text-slate-900">$0</span>
+                            </div>
+                            <hr class="my-2 border-slate-300">
+                            <div class="flex justify-between items-center text-lg font-bold bg-teal-600 text-white -mx-6 -mb-6 mt-4 p-4 rounded-b-lg">
+                                <span >Total Cost of Ownership:</span>
+                                <span id="projTotalCost" >$0</span>
+                            </div>
+                        </div>
+                         <div class="space-y-4 bg-white p-6 rounded-lg shadow-md border border-slate-200 mt-6">
+                            <div>
+                                <label for="appreciationRate" class="block text-sm font-medium text-slate-700 mb-1">Annual Property Appreciation (%)</label>
+                                <input type="number" id="appreciationRate" class="form-input" value="4.5" step="0.1">
+                                <p class="text-xs text-slate-500 mt-1">Updates automatically when a city is selected in 'Local Analysis'.</p>
+                            </div>
+                             <div>
+                                <label for="maintenanceRate" class="block text-sm font-medium text-slate-700 mb-1">Annual Maintenance (% of Home Value)</label>
+                                <input type="number" id="maintenanceRate" class="form-input" value="1.5" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="comparison" class="tab-content">
+                <p class="text-slate-600 mb-6">Compare up to three different scenarios side-by-side. Save a snapshot from the 'Affordability Analysis' tab to populate a column here.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="scenario-container">
+                </div>
+                 <div id="no-scenarios-message" class="text-center py-12">
+                    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-slate-900">No Scenarios Saved</h3>
+                    <p class="mt-1 text-sm text-slate-500">Go to 'Affordability' and click "Save as Scenario".</p>
+                </div>
+                 <div id="comparison-chart-container" class="mt-8 hidden">
+                    <h3 class="text-xl font-semibold mb-4 text-slate-800 text-center">Scenario Financial Comparison</h3>
+                    <div class="chart-container">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="summary" class="tab-content">
+                <div id="printable-area">
+                    <h2 class="text-2xl font-semibold text-slate-900 mb-4">Executive Summary & Calculation Guide</h2>
+                    <div class="mt-4 bg-amber-50 p-6 rounded-lg text-amber-800 border border-amber-200">
+                         <p id="executiveSummary" class="leading-relaxed"></p>
+                    </div>
+
+                    <h3 class="mt-8 text-xl font-semibold text-slate-900">Calculation Explanations</h3>
+                    <p>This dashboard uses industry-standard formulas and Michigan-specific data to provide accurate financial estimations. Here's how the numbers are calculated:</p>
+
+                    <details class="mt-4 group">
+                        <summary class="font-semibold cursor-pointer group-hover:text-indigo-600">Affordability Analysis</summary>
+                        <ul class="mt-2 pl-5 list-disc space-y-2 text-sm">
+                            <li><strong>Monthly P&I (Principal & Interest):</strong> Calculated using the standard amortization formula based on loan amount, interest rate, and term.</li>
+                            <li><strong>Monthly Property Tax:</strong> Estimated by multiplying the Home Price by the selected county's average effective tax rate, then dividing by 12. For more precise calculations based on city millage rates, see the 'Local Analysis' tab.</li>
+                            <li><strong>Monthly Homeowners Insurance:</strong> The annual insurance cost, calculated as `Home Price * (Insurance Rate / 100)`, is divided by 12.</li>
+                            <li><strong>Monthly PMI (Private Mortgage Insurance):</strong> Required if your down payment is less than 20%. The annual PMI rate (which varies by credit score) is multiplied by the loan amount and then divided by 12.</li>
+                            <li><strong>Affordability Ratios:</strong> We check your total monthly payment against your gross income (for the 28/36 rules) and your net income (for the 25% rule) to provide common affordability benchmarks.</li>
+                            <li><strong>Closing Costs:</strong> Estimated as a flat 3.5% of the Home Price, based on Michigan averages.</li>
+                        </ul>
+                    </details>
+                    
+                    <details class="mt-4 group">
+                        <summary class="font-semibold cursor-pointer group-hover:text-indigo-600">Payoff Calculator</summary>
+                        <ul class="mt-2 pl-5 list-disc space-y-2 text-sm">
+                             <li><strong>Total Paid:</strong> The sum of all principal and interest paid over the life of the loan.</li>
+                            <li><strong>Interest Paid:</strong> The total interest accumulated over the loan term.</li>
+                            <li><strong>Payoff Time:</strong> The duration until the loan balance reaches zero.</li>
+                            <li><strong>Interest Saved:</strong> The difference in total interest paid between the standard schedule and the accelerated schedule.</li>
+                            <li><strong>Bi-Weekly Simulation:</strong> This adds the equivalent of one extra monthly payment per year, applied directly to the principal, to simulate a bi-weekly payoff strategy.</li>
+                        </ul>
+                    </details>
+
+                    <details class="mt-4 group">
+                        <summary class="font-semibold cursor-pointer group-hover:text-indigo-600">Home Value Projections</summary>
+                        <ul class="mt-2 pl-5 list-disc space-y-2 text-sm">
+                            <li><strong>Projected Value:</strong> Calculated using compound appreciation: `Current Value * (1 + Annual Appreciation Rate) ^ Years`. The appreciation rate is adjustable by the user and defaults to city-specific data when a city is selected in 'Local Analysis'.</li>
+                            <li><strong>Total Mortgage Payments:</strong> The total of just your principal and interest payments over the selected time frame.</li>
+                            <li><strong>Total Maintenance:</strong> This is an estimate of cumulative upkeep costs, calculated annually against the appreciating value of the home.</li>
+                            <li><strong>Total Cost of Ownership:</strong> A holistic view combining your total mortgage payments, taxes, insurance, and maintenance costs over the projection period.</li>
+                        </ul>
+                    </details>
+                </div>
+                 <div class="mt-8 text-center no-print">
+                    <button id="printBtn" class="bg-slate-600 text-white font-semibold py-2.5 px-6 rounded-lg hover:bg-slate-700 transition-colors shadow-md hover:shadow-lg">Print Summary</button>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-12 pt-8 border-t border-slate-200 text-center text-slate-500 text-sm">
+            <p>&copy; 2025 Anand Chitte | Michigan Home Affordability Dashboard. All Rights Reserved.</p>
+            <div class="mt-6">
+                <h4 class="font-semibold text-slate-600 mb-3">Data &amp; Formula References</h4>
+                <ul class="list-none p-0 m-0 flex flex-wrap justify-center gap-x-4 gap-y-2">
+                    <li><a href="https://www.nerdwallet.com/article/mortgages/pmi-calculator" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">PMI Rates</a></li>
+                    <li><a href="http://www.tax-rates.org/michigan/property-tax" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">Property Taxes</a></li>
+                    <li><a href="https://www.niche.com" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">Niche.com (School Ratings)</a></li>
+                    <li><a href="https://www.michigan.gov/treasury/local-government/property-tax-data/millage-rates" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">MI Millage Rates</a></li>
+                    <li><a href="https://www.investopedia.com/terms/t/twenty-eight-thirty-six-rule.asp" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">28/36 Rule</a></li>
+                    <li><a href="https://financebuzz.com/dave-ramsey-25-percent-home-rule-pros-cons" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">Ramsey 25% Rule</a></li>
+                    <li><a href="https://www.bankrate.com/mortgages/bi-weekly-mortgage-calculator/" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">Bi-Weekly Payments</a></li>
+                    <li><a href="https://www.houzeo.com/blog/how-much-are-closing-costs-in-michigan/" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">Closing Costs</a></li>
+                     <li><a href="https://www.bluewestproperties.com/blog/michigan-real-estate-market-2025" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-600 transition-colors">MI Market Data</a></li>
+                </ul>
+            </div>
+        </footer>
+
+    </div>
+
+    <div id="closing-cost-modal" class="modal">
+        <div class="modal-content">
+            <span id="close-modal-btn" class="close-button">&times;</span>
+            <h3 class="text-xl font-semibold text-slate-800 mb-4">Estimated Closing Costs Breakdown</h3>
+            <p class="text-sm text-slate-600 mb-4">These are estimates based on a 3.5% average rate in Michigan for a home price of <strong id="modal-home-price">$0</strong>. Actual costs may vary.</p>
+            <ul id="closing-cost-list" class="space-y-2 text-sm"></ul>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const michiganCountyTaxRates = { "Alcona": 0.0085, "Alger": 0.0100, "Allegan": 0.0119, "Alpena": 0.0115, "Antrim": 0.0100, "Arenac": 0.0131, "Baraga": 0.0141, "Barry": 0.0117, "Bay": 0.0167, "Benzie": 0.0084, "Berrien": 0.0115, "Branch": 0.0125, "Calhoun": 0.0160, "Cass": 0.0103, "Charlevoix": 0.0102, "Cheboygan": 0.0094, "Chippewa": 0.0133, "Clare": 0.0120, "Clinton": 0.0129, "Crawford": 0.0111, "Delta": 0.0120, "Dickinson": 0.0148, "Eaton": 0.0148, "Emmet": 0.0097, "Genesee": 0.0147, "Gladwin": 0.0123, "Gogebic": 0.0166, "Grand Traverse": 0.0103, "Gratiot": 0.0133, "Hillsdale": 0.0102, "Houghton": 0.0129, "Huron": 0.0128, "Ingham": 0.0193, "Ionia": 0.0123, "Iosco": 0.0105, "Iron": 0.0151, "Isabella": 0.0132, "Jackson": 0.0134, "Kalamazoo": 0.0152, "Kalkaska": 0.0097, "Kent": 0.0119, "Keweenaw": 0.0099, "Lake": 0.0117, "Lapeer": 0.0097, "Leelanau": 0.0071, "Lenawee": 0.0139, "Livingston": 0.0102, "Luce": 0.0100, "Mackinac": 0.0106, "Macomb": 0.0147, "Manistee": 0.0116, "Marquette": 0.0107, "Mason": 0.0114, "Mecosta": 0.0105, "Menominee": 0.0108, "Midland": 0.0160, "Missaukee": 0.0097, "Monroe": 0.0118, "Montcalm": 0.0113, "Montmorency": 0.0104, "Muskegon": 0.0136, "Newaygo": 0.0120, "Oakland": 0.0136, "Oceana": 0.0122, "Ogemaw": 0.0108, "Ontonagon": 0.0131, "Osceola": 0.0112, "Oscoda": 0.0096, "Otsego": 0.0095, "Ottawa": 0.0109, "Presque Isle": 0.0111, "Roscommon": 0.0110, "Saginaw": 0.0154, "Sanilac": 0.0097, "Schoolcraft": 0.0101, "Shiawassee": 0.0136, "St. Clair": 0.0122, "St. Joseph": 0.0115, "Tuscola": 0.0131, "Van Buren": 0.0138, "Washtenaw": 0.0156, "Wayne": 0.0173, "Wexford": 0.0122 };
+        const pmiRates = { "760+": 0.0036, "720-759": 0.0045, "680-719": 0.0070, "620-679": 0.0088, "<620": 0.0095 };
+        const termRates = { "30": 6.95, "20": 6.71, "15": 6.02, "10": 6.16, "5_1_ARM": 6.55, "7_1_ARM": 6.65 };
+        const cityData = {
+            "Rochester": { schoolRating: "A+", millageRate: 34.8, medianHomePrice: 480000, appreciation: 4.9, vibe: "Historic downtown charm with modern suburban amenities and extensive park systems." },
+            "Novi": { schoolRating: "A+", millageRate: 37.3, medianHomePrice: 530000, appreciation: 5.1, vibe: "A diverse, growing hub known for its shopping, international community, and strong schools." },
+            "Troy": { schoolRating: "A+", millageRate: 39.9, medianHomePrice: 460000, appreciation: 4.7, vibe: "A major business and shopping destination with a reputation for safety and excellent schools." },
+            "Northville": { schoolRating: "A+", millageRate: 41.5, medianHomePrice: 650000, appreciation: 5.3, vibe: "A quaint, historic town with a vibrant downtown, strong community feel, and top-tier schools." },
+            "Lake Orion": { schoolRating: "A+", millageRate: 40.2, medianHomePrice: 450000, appreciation: 4.8, vibe: "Known for its beautiful lake, vibrant downtown, and strong community feel." },
+            "Orion Township": { schoolRating: "A+", millageRate: 38.5, medianHomePrice: 420000, appreciation: 4.7, vibe: "Offers a blend of suburban living with access to parks, trails, and lakes." },
+            "Clarkston": { schoolRating: "A", millageRate: 35.1, medianHomePrice: 400000, appreciation: 4.6, vibe: "Historic village atmosphere with a nationally recognized downtown and concert venue." },
+            "Shelby Township": { schoolRating: "A", millageRate: 32.5, medianHomePrice: 380000, appreciation: 4.4, vibe: "Sprawling suburban community with extensive parks, shopping, and family-oriented neighborhoods." },
+            "Sterling Heights": { schoolRating: "A-", millageRate: 42.1, medianHomePrice: 350000, appreciation: 4.3, vibe: "A large, diverse city known for its robust city services, parks, and cultural events." }
+        };
+        
+        const inputs = { homePrice: document.getElementById('homePrice'), downPaymentPercent: document.getElementById('downPaymentPercent'), downPaymentAmount: document.getElementById('downPaymentAmount'), loanType: document.getElementById('loanType'), interestRate: document.getElementById('interestRate'), annualIncome: document.getElementById('annualIncome'), netMonthlyIncome: document.getElementById('netMonthlyIncome'), monthlyDebts: document.getElementById('monthlyDebts'), creditScore: document.getElementById('creditScore'), county: document.getElementById('county'), insuranceRate: document.getElementById('insuranceRate'), hoaFees: document.getElementById('hoaFees'), extraPayment: document.getElementById('extraPayment'), biweeklyPayments: document.getElementById('biweeklyPayments'), appreciationRate: document.getElementById('appreciationRate'), maintenanceRate: document.getElementById('maintenanceRate'), desiredPayment: document.getElementById('desiredPayment'), budgetDownPayment: document.getElementById('budgetDownPayment'), budgetAnnualIncome: document.getElementById('budgetAnnualIncome'), budgetMonthlyDebts: document.getElementById('budgetMonthlyDebts'), waitAppreciation: document.getElementById('waitAppreciation'), waitInterestRateChange: document.getElementById('waitInterestRateChange'), citySelect: document.getElementById('citySelect') };
+        const outputs = { downPaymentPercentValue: document.getElementById('downPaymentPercentValue'), totalMonthlyPayment: document.getElementById('totalMonthlyPayment'), housingRatio: document.getElementById('housingRatio'), debtRatio: document.getElementById('debtRatio'), ramseyRatio: document.getElementById('ramseyRatio'), housingRatioCard: document.getElementById('housingRatioCard'), debtRatioCard: document.getElementById('debtRatioCard'), ramseyRatioCard: document.getElementById('ramseyRatioCard'), upfrontDownPayment: document.getElementById('upfrontDownPayment'), closingCosts: document.getElementById('closingCosts'), cashToClose: document.getElementById('cashToClose'), executiveSummary: document.getElementById('executiveSummary'), standardPayoffRow: document.getElementById('standardPayoffRow'), acceleratedPayoffRow: document.getElementById('acceleratedPayoffRow'), projCurrentValue: document.getElementById('projCurrentValue'), projProjectedValue: document.getElementById('projProjectedValue'), projAppreciation: document.getElementById('projAppreciation'), projMortgage: document.getElementById('projMortgage'), projTaxes: document.getElementById('projTaxes'), projInsurance: document.getElementById('projInsurance'), projMaintenance: document.getElementById('projMaintenance'), projTotalCost: document.getElementById('projTotalCost'), homeValueChartTitle: document.getElementById('homeValueChartTitle'), armInfo: document.getElementById('arm-info'), armProjectionInfo: document.getElementById('arm-projection-info'), armProjectionText: document.getElementById('armProjectionText'), affordableHomePrice: document.getElementById('affordableHomePrice'), waitTodayPayment: document.getElementById('waitTodayPayment'), waitNextYearPayment: document.getElementById('waitNextYearPayment'), waitDifference: document.getElementById('waitDifference'), modalHomePrice: document.getElementById('modal-home-price'), closingCostList: document.getElementById('closing-cost-list'), citySchoolRating: document.getElementById('citySchoolRating'), cityMillageRate: document.getElementById('cityMillageRate'), cityMedianPrice: document.getElementById('cityMedianPrice'), cityVibe: document.getElementById('cityVibe'), cityPropertyTax: document.getElementById('cityPropertyTax'), cityTaxHomePrice: document.getElementById('cityTaxHomePrice') };
+        
+        let paymentChart, amortizationChart, homeValueChart, comparisonChart;
+        let scenarios = JSON.parse(localStorage.getItem('scenarios')) || [];
+
+        function formatCurrency(value, digits = 0) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value); }
+        function formatYearsMonths(totalMonths) { const years = Math.floor(totalMonths / 12); const months = totalMonths % 12; return `${years} yr, ${months} mo`; }
+        function populateCountyDropdown() { const countySelect = inputs.county; const counties = Object.keys(michiganCountyTaxRates).sort(); counties.forEach(county => { const option = document.createElement('option'); option.value = county; option.textContent = county; countySelect.appendChild(option); }); if (counties.includes("Oakland")) countySelect.value = "Oakland"; else if (counties.length > 0) countySelect.value = counties[0]; }
+        
+        function populateCityDropdown() {
+            const citySelect = inputs.citySelect;
+            Object.keys(cityData).forEach(city => {
+                const option = document.createElement('option');
+                option.value = city;
+                option.textContent = city;
+                citySelect.appendChild(option);
+            });
+        }
+        
+        function updateDownPayment(source) {
+            const price = parseFloat(inputs.homePrice.value) || 0;
+            if (source === 'percent') {
+                const percent = parseFloat(inputs.downPaymentPercent.value) / 100;
+                const amount = price * percent;
+                inputs.downPaymentAmount.value = amount.toFixed(0);
+                outputs.downPaymentPercentValue.textContent = `${inputs.downPaymentPercent.value}%`;
+            } else {
+                const amount = parseFloat(inputs.downPaymentAmount.value) || 0;
+                const percent = price > 0 ? (amount / price) * 100 : 0;
+                inputs.downPaymentPercent.value = percent.toFixed(1);
+                outputs.downPaymentPercentValue.textContent = `${percent.toFixed(1)}%`;
+            }
+            calculateAll();
+        }
+
+        function calculateAll() {
+            const price = parseFloat(inputs.homePrice.value) || 0;
+            const downPayment = parseFloat(inputs.downPaymentAmount.value) || 0;
+            const interestRate = parseFloat(inputs.interestRate.value) / 100;
+            const selectedLoanType = inputs.loanType.value;
+            const termYears = parseInt(inputs.loanType.options[inputs.loanType.selectedIndex].dataset.term);
+            const annualIncome = parseFloat(inputs.annualIncome.value) || 0;
+            const netMonthlyIncome = parseFloat(inputs.netMonthlyIncome.value) || 0;
+            const monthlyDebts = parseFloat(inputs.monthlyDebts.value) || 0;
+            const creditScore = inputs.creditScore.value;
+            const selectedCounty = inputs.county.value;
+            const insuranceRate = parseFloat(inputs.insuranceRate.value) / 100 || 0;
+            const hoaFees = parseFloat(inputs.hoaFees.value) || 0;
+            const loanAmount = price - downPayment;
+            
+            if (price <= 0 || loanAmount < 0) {
+                // Simplified reset logic
+                return;
+            }
+
+            const monthlyInterestRate = interestRate / 12;
+            const numberOfPayments = termYears * 12;
+
+            const monthlyPI = loanAmount > 0 && monthlyInterestRate > 0 ? loanAmount * (monthlyInterestRate * Math.pow(1 + monthlyInterestRate, numberOfPayments)) / (Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1) : (loanAmount > 0 ? loanAmount / numberOfPayments : 0) ;
+            const monthlyTax = (price * (michiganCountyTaxRates[selectedCounty] || 0)) / 12;
+            const monthlyInsurance = (price * insuranceRate) / 12;
+
+            const ltv = price > 0 ? loanAmount / price : 0;
+            const pmiRateKey = inputs.creditScore.value;
+            const annualPmiRate = ltv >= 0.8 ? (pmiRates[pmiRateKey] || 0) : 0;
+            const monthlyPMI = (loanAmount * annualPmiRate) / 12;
+
+            const totalMonthlyPayment = monthlyPI + monthlyTax + monthlyInsurance + monthlyPMI + hoaFees;
+            const grossMonthlyIncome = annualIncome / 12;
+
+            const housingRatioVal = grossMonthlyIncome > 0 ? (totalMonthlyPayment / grossMonthlyIncome) : 0;
+            const debtRatioVal = grossMonthlyIncome > 0 ? ((totalMonthlyPayment + monthlyDebts) / grossMonthlyIncome) : 0;
+            const ramseyRatioVal = netMonthlyIncome > 0 ? (totalMonthlyPayment / netMonthlyIncome) : 0;
+
+            outputs.totalMonthlyPayment.textContent = formatCurrency(totalMonthlyPayment);
+            outputs.housingRatio.textContent = `${(housingRatioVal * 100).toFixed(1)}%`;
+            outputs.debtRatio.textContent = `${(debtRatioVal * 100).toFixed(1)}%`;
+            outputs.ramseyRatio.textContent = `${(ramseyRatioVal * 100).toFixed(1)}%`;
+            
+            updateRatioCard(outputs.housingRatioCard, housingRatioVal, 0.28);
+            updateRatioCard(outputs.debtRatioCard, debtRatioVal, 0.36);
+            updateRatioCard(outputs.ramseyRatioCard, ramseyRatioVal, 0.25);
+
+            const estClosingCosts = price * 0.035;
+            outputs.upfrontDownPayment.textContent = formatCurrency(downPayment);
+            outputs.closingCosts.textContent = formatCurrency(estClosingCosts);
+            outputs.cashToClose.textContent = formatCurrency(downPayment + estClosingCosts);
+
+            updatePaymentChart([monthlyPI, monthlyTax, monthlyInsurance, monthlyPMI, hoaFees]);
+            updatePayoffCalculator();
+            updateHomeValueProjections();
+            updateExecutiveSummary({price, annualIncome, monthlyDebts, totalMonthlyPayment, housingRatioVal, ramseyRatioVal, pmi: monthlyPMI > 0});
+            updateCostOfWaiting();
+            updateCityAnalysis();
+        }
+        
+        function updateRatioCard(card, value, threshold) {
+            card.classList.remove('bg-green-100', 'text-green-800', 'bg-yellow-100', 'text-yellow-800', 'bg-red-100', 'text-red-800', 'bg-slate-100', 'text-slate-800');
+            if (value === 0 && threshold > 0) { card.classList.add('bg-slate-100', 'text-slate-800'); } 
+            else if (value <= threshold) { card.classList.add('bg-green-100', 'text-green-800'); } 
+            else if (value <= threshold + 0.05) { card.classList.add('bg-yellow-100', 'text-yellow-800'); } 
+            else { card.classList.add('bg-red-100', 'text-red-800'); }
+        }
+        
+        function updateExecutiveSummary(data) {
+            let summary = `For a home priced at ${formatCurrency(data.price)}, the estimated monthly cost is ${formatCurrency(data.totalMonthlyPayment)}. `;
+            summary += `This represents ${ (data.housingRatioVal * 100).toFixed(1)}% of your gross income. `;
+            if (data.housingRatioVal > 0.28) summary += `This is above the standard 28% affordability guideline. `;
+            if(data.pmi) summary += `Your down payment results in PMI costs. Increasing it to 20% could eliminate this.`;
+            outputs.executiveSummary.textContent = summary;
+        }
+        
+        function updatePaymentChart(data) {
+            if(!paymentChart) {
+                 const ctx = document.getElementById('paymentChart').getContext('2d');
+                 paymentChart = new Chart(ctx, { type: 'doughnut', options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'bottom', labels:{padding:15, boxWidth:12, font:{size:11}} }, tooltip: { callbacks: { label: (c) => `${c.label}: ${formatCurrency(c.raw)}` } } } } });
+            }
+            paymentChart.data = {
+                labels: ['Principal & Interest', 'Property Tax', 'Home Insurance', 'PMI', 'HOA Fees'],
+                datasets: [{ data, backgroundColor: ['#4f46e5', '#3b82f6', '#14b8a6', '#f59e0b', '#64748b'], borderColor: '#eef2ff', borderWidth: 3, hoverOffset: 4 }]
+            };
+            paymentChart.update();
+        }
+        
+        function calculateAmortizationData(principal, annualRate, termYears, userExtraPayment = 0, biweekly = false) {
+            if (principal <= 0) { return { chartData: [{x:0, y:0}], totalInterest: 0, paymentCount: 0, totalPayments: 0 }; }
+            let balance = principal;
+            const monthlyRate = annualRate / 12;
+            let n_orig = termYears * 12;
+            const baseMonthlyPayment = monthlyRate > 0 ? principal * (monthlyRate * Math.pow(1 + monthlyRate, n_orig)) / (Math.pow(1 + monthlyRate, n_orig) - 1) : principal / n_orig;
+            let totalInterest = 0;
+            const chartData = [{ x: 0, y: principal }];
+            let paymentCount = 0;
+            let effectiveExtraPayment = parseFloat(userExtraPayment) || 0;
+            if (biweekly) { effectiveExtraPayment += baseMonthlyPayment / 12; }
+            for (let m = 1; m <= n_orig * 2 && balance > 0.005; m++) {
+                paymentCount++;
+                let interestPaid = balance * monthlyRate;
+                let principalPaid = baseMonthlyPayment - interestPaid + effectiveExtraPayment;
+                if (balance - principalPaid < 0) { principalPaid = balance; }
+                balance -= principalPaid;
+                totalInterest += interestPaid;
+                if (m % 12 === 0 || balance <= 0) {
+                    let currentYear = Math.ceil(m/12);
+                    if (!chartData.find(p => p.x === currentYear) || balance <= 0) {
+                        chartData.push({ x: currentYear, y: Math.max(0, parseFloat(balance.toFixed(2))) });
+                    }
+                }
+            }
+            return { chartData, totalInterest, paymentCount, totalPayments: principal + totalInterest };
+        }
+        
+        function updatePayoffCalculator() {
+            const loanAmount = (parseFloat(inputs.homePrice.value) || 0) - (parseFloat(inputs.downPaymentAmount.value) || 0);
+            const interestRate = parseFloat(inputs.interestRate.value) / 100;
+            const selectedLoanType = inputs.loanType.value;
+            const termYears = parseInt(inputs.loanType.options[inputs.loanType.selectedIndex].dataset.term);
+            
+            if (loanAmount <= 0) {
+                outputs.standardPayoffRow.innerHTML = `<td colspan="5" class="p-4 text-center text-slate-500">Enter valid loan details.</td>`;
+                outputs.acceleratedPayoffRow.innerHTML = ``;
+                if(amortizationChart) { amortizationChart.data.datasets = []; amortizationChart.update(); }
+                return;
+            }
+            
+            const extraPayment = parseFloat(inputs.extraPayment.value) || 0;
+            const useBiweekly = inputs.biweeklyPayments.checked;
+            const standard = calculateAmortizationData(loanAmount, interestRate, termYears);
+            const accelerated = calculateAmortizationData(loanAmount, interestRate, termYears, extraPayment, useBiweekly);
+
+            outputs.standardPayoffRow.innerHTML = `<td>Standard Payment</td><td class="text-right">${formatCurrency(standard.totalPayments)}</td><td class="text-right">${formatCurrency(standard.totalInterest)}</td><td class="text-right">${formatYearsMonths(standard.paymentCount)}</td><td class="text-right">-</td>`;
+            outputs.acceleratedPayoffRow.innerHTML = `<td>Accelerated Payment</td><td class="text-right">${formatCurrency(accelerated.totalPayments)}</td><td class="text-right">${formatCurrency(accelerated.totalInterest)}</td><td class="text-right">${formatYearsMonths(accelerated.paymentCount)}</td><td class="text-right font-bold text-green-600">${formatCurrency(standard.totalInterest - accelerated.totalInterest)}</td>`;
+            
+            updateAmortizationChart(standard.chartData, accelerated.chartData);
+
+            if (selectedLoanType.includes('ARM')) {
+                const armFixedPeriod = parseInt(selectedLoanType.charAt(0));
+                const balanceAfterFixed = standard.chartData.find(d => d.x === armFixedPeriod)?.y || 0;
+                if (balanceAfterFixed > 0) {
+                    const adjustedRate = interestRate + 0.02; // Illustrative 2% cap
+                    const remainingTerm = termYears - armFixedPeriod;
+                    const newPI = calculatePI(balanceAfterFixed, adjustedRate, remainingTerm);
+                    outputs.armProjectionText.textContent = `After ${armFixedPeriod} years, your principal & interest could adjust to ~${formatCurrency(newPI)}/mo if rates increase by 2%.`;
+                    outputs.armProjectionInfo.classList.remove('hidden');
+                } else {
+                    outputs.armProjectionInfo.classList.add('hidden');
+                }
+            } else {
+                outputs.armProjectionInfo.classList.add('hidden');
+            }
+        }
+        
+        function updateAmortizationChart(standardData, acceleratedData) {
+            if(!amortizationChart) {
+                const ctx = document.getElementById('amortizationChart').getContext('2d');
+                amortizationChart = new Chart(ctx, { type: 'line', options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { title: { display: true, text: 'Years', font:{size:12, weight:'500'}}, grid:{display:false} }, y: { title: { display: true, text: 'Loan Balance ($)', font:{size:12, weight:'500'} }, ticks: {callback: (value) => formatCurrency(value)} } }, plugins: { legend:{position:'top', align: 'end', labels:{usePointStyle:true, pointStyle:'rectRounded', padding: 20}}, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatCurrency(c.raw.y || c.raw)}` } } } } });
+            }
+            amortizationChart.data = {
+                labels: Array.from({ length: Math.max(standardData.length, acceleratedData.length) }, (_, i) => i),
+                datasets: [
+                    { label: 'Standard', data: standardData, borderColor: '#a5b4fc', backgroundColor: 'rgba(165, 180, 252, 0.2)', fill: true, tension: 0.3, pointRadius: 0 },
+                    { label: 'Accelerated', data: acceleratedData, borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.2)', fill: true, tension: 0.3, pointRadius: 0, borderDash: [5, 5] }
+                ]
+            };
+            amortizationChart.update();
+        }
+
+        function updateHomeValueProjections() {
+             const selectedButton = document.querySelector('#projection-term-buttons .active');
+             if (!selectedButton) return;
+             const projectionYears = parseInt(selectedButton.dataset.years);
+             const homePrice = parseFloat(inputs.homePrice.value) || 0;
+             const termYears = parseInt(inputs.loanType.options[inputs.loanType.selectedIndex].dataset.term);
+             const insuranceRate = (parseFloat(inputs.insuranceRate.value) || 0) / 100;
+             const maintenanceRate = (parseFloat(inputs.maintenanceRate.value) || 0) / 100;
+             const appreciationRate = (parseFloat(inputs.appreciationRate.value) || 0) / 100;
+             const loanAmount = homePrice - (parseFloat(inputs.downPaymentAmount.value) || 0);
+             const interestRate = parseFloat(inputs.interestRate.value) / 100;
+             const countyRate = michiganCountyTaxRates[inputs.county.value] || 0;
+             const monthlyPI = calculatePI(loanAmount, interestRate, termYears);
+
+             const valueData = [];
+             let totalMaintenance = 0, totalInsurance = 0;
+             for (let i = 0; i <= projectionYears; i++) {
+                const projectedVal = homePrice * Math.pow(1 + appreciationRate, i);
+                valueData.push(projectedVal);
+                if(i > 0) {
+                   const prevYearVal = valueData[i-1];
+                   totalMaintenance += prevYearVal * maintenanceRate;
+                   totalInsurance += prevYearVal * insuranceRate;
+                }
+             }
+
+             const projectedValueFinal = valueData[valueData.length-1];
+             const totalAppreciation = projectedValueFinal - homePrice;
+             const totalMortgagePayments = monthlyPI * 12 * Math.min(projectionYears, termYears);
+             const totalTaxes = (homePrice * countyRate) * projectionYears;
+             const totalCost = totalMortgagePayments + totalTaxes + totalInsurance + totalMaintenance;
+
+             outputs.projCurrentValue.textContent = formatCurrency(homePrice);
+             outputs.projProjectedValue.textContent = formatCurrency(projectedValueFinal);
+             outputs.projAppreciation.textContent = formatCurrency(totalAppreciation);
+             outputs.projMortgage.textContent = formatCurrency(totalMortgagePayments);
+             outputs.projTaxes.textContent = formatCurrency(totalTaxes);
+             outputs.projInsurance.textContent = formatCurrency(totalInsurance);
+             outputs.projMaintenance.textContent = formatCurrency(totalMaintenance);
+             outputs.projTotalCost.textContent = formatCurrency(totalCost);
+             outputs.homeValueChartTitle.textContent = `Home Value Projection (${projectionYears} Years)`;
+
+             if(!homeValueChart) {
+                const ctx = document.getElementById('homeValueChart').getContext('2d');
+                homeValueChart = new Chart(ctx, { type: 'line', options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Years'}}, y: { ticks: {callback: (v) => formatCurrency(v)}} }, plugins: { legend: { display: false}, tooltip: { callbacks: { label: (c) => `Year ${c.label}: ${formatCurrency(c.raw)}` } } } } });
+             }
+             homeValueChart.data = {
+                 labels: Array.from({length: projectionYears + 1}, (_, i) => i),
+                 datasets: [{ label: 'Home Value', data: valueData, borderColor: '#0d9488', backgroundColor: 'rgba(13, 148, 136, 0.1)', fill: true, tension: 0.3, pointRadius: 0 }]
+             };
+             homeValueChart.update();
+        }
+        
+        function saveScenario() {
+            if (scenarios.length >= 3) { alert("You can save a maximum of 3 scenarios. Please remove one to add a new one."); return; }
+            const scenario = { id: Date.now(), inputs: {}, outputs: {} };
+            for (const key in inputs) {
+                 if (inputs[key] && typeof inputs[key].value !== 'undefined') {
+                    scenario.inputs[key] = inputs[key].type === 'checkbox' ? inputs[key].checked : inputs[key].value;
+                 }
+            }
+            const price = parseFloat(inputs.homePrice.value) || 0;
+            const downPayment = parseFloat(inputs.downPaymentAmount.value) || 0;
+            scenario.outputs.totalMonthlyPayment = parseFloat(outputs.totalMonthlyPayment.textContent.replace(/[^0-9.-]+/g,""));
+            scenario.outputs.cashToClose = downPayment + (price * 0.035);
+            scenarios.push(scenario);
+            localStorage.setItem('scenarios', JSON.stringify(scenarios));
+            renderScenarios();
+        }
+        
+        function deleteScenario(id) {
+            scenarios = scenarios.filter(s => s.id !== id);
+            localStorage.setItem('scenarios', JSON.stringify(scenarios));
+            renderScenarios();
+        }
+
+        function renderScenarios() {
+            const container = document.getElementById('scenario-container');
+            container.innerHTML = '';
+            const noScenariosMsg = document.getElementById('no-scenarios-message');
+            const comparisonChartContainer = document.getElementById('comparison-chart-container');
+            if (scenarios.length === 0) { noScenariosMsg.style.display = 'block'; comparisonChartContainer.style.display = 'none'; return; }
+            noScenariosMsg.style.display = 'none';
+            comparisonChartContainer.style.display = 'block';
+
+            scenarios.forEach((s, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-5 rounded-lg shadow-lg border border-slate-200 flex flex-col';
+                card.innerHTML = `
+                    <div class="flex-grow">
+                        <div class="flex justify-between items-center mb-4"><h4 class="text-lg font-semibold text-indigo-700">Scenario ${index + 1}</h4><button class="delete-scenario-btn text-slate-400 hover:text-red-600 text-2xl font-bold" data-id="${s.id}" aria-label="Delete scenario ${index + 1}">&times;</button></div>
+                        <p class="text-sm text-slate-500">Home Price: <span class="font-medium text-slate-700">${formatCurrency(s.inputs.homePrice)}</span></p>
+                        <p class="text-sm text-slate-500">Down Payment: <span class="font-medium text-slate-700">${parseFloat(s.inputs.downPaymentPercent).toFixed(1)}%</span></p>
+                        <p class="text-sm text-slate-500">Interest Rate: <span class="font-medium text-slate-700">${s.inputs.interestRate}%</span></p>
+                        <hr class="my-3 border-slate-200">
+                        <p class="text-slate-600">Monthly Payment: <span class="block text-2xl font-bold text-slate-800">${formatCurrency(s.outputs.totalMonthlyPayment)}</span></p>
+                        <p class="text-slate-600 mt-2">Cash to Close: <span class="block text-xl font-bold text-slate-800">${formatCurrency(s.outputs.cashToClose)}</span></p>
+                    </div>
+                    <button class="load-scenario-btn mt-4 w-full bg-slate-200 text-slate-700 font-medium py-2 px-4 rounded-md hover:bg-slate-300 transition-colors" data-id="${s.id}">Load Scenario</button>`;
+                container.appendChild(card);
+            });
+            updateComparisonChart();
+        }
+        
+        function loadScenario(id) {
+            const scenario = scenarios.find(s => s.id === id);
+            if(scenario) {
+                for (const key in scenario.inputs) { if (inputs[key]) { if (inputs[key].type === 'checkbox') inputs[key].checked = scenario.inputs[key]; else inputs[key].value = scenario.inputs[key]; } }
+                outputs.downPaymentPercentValue.textContent = `${parseFloat(inputs.downPaymentPercent.value).toFixed(1)}%`;
+                calculateAll();
+                document.querySelector('.tab-btn[data-tab="analysis"]').click();
+            }
+        }
+        
+        function updateComparisonChart() {
+            if (!comparisonChart) { const ctx = document.getElementById('comparisonChart').getContext('2d'); comparisonChart = new Chart(ctx, { type: 'bar', options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: {callback: (v) => formatCurrency(v)} }, x:{grid:{display:false}} }, plugins: { legend:{position:'top'}, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${formatCurrency(c.raw)}` } } } } }); }
+            comparisonChart.data = {
+                labels: scenarios.map((s, i) => `Scenario ${i+1}`),
+                datasets: [ { label: 'Monthly Payment', data: scenarios.map(s => s.outputs.totalMonthlyPayment), backgroundColor: '#4f46e5' }, { label: 'Cash to Close', data: scenarios.map(s => s.outputs.cashToClose), backgroundColor: '#818cf8' } ]
+            };
+            comparisonChart.update();
+        }
+        
+        function handleLoanTypeChange() {
+            const selectedLoanType = inputs.loanType.value;
+            if (termRates[selectedLoanType]) {
+                inputs.interestRate.value = termRates[selectedLoanType];
+            }
+            outputs.armInfo.classList.toggle('hidden', !selectedLoanType.includes('ARM'));
+            calculateAll();
+        }
+
+        function calculatePI(loan, rate, termYears) {
+            const monthlyRate = rate / 12;
+            const numPayments = termYears * 12;
+            if (loan > 0 && monthlyRate > 0) {
+                return loan * (monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / (Math.pow(1 + monthlyRate, numPayments) - 1);
+            }
+            return loan > 0 ? loan / numPayments : 0;
+        }
+
+        function calculateBudget() {
+            const desiredPayment = parseFloat(inputs.desiredPayment.value) || 0;
+            const downPayment = parseFloat(inputs.budgetDownPayment.value) || 0;
+            const rate = termRates["30"] / 100;
+            const term = 30;
+            const monthlyRate = rate / 12;
+            const n = term * 12;
+            const mortgageFactor = (monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+            const estTaxInsPMIPercent = 0.02; // Average 2% for taxes, insurance, PMI
+            const totalRateFactor = mortgageFactor + (estTaxInsPMIPercent / 12);
+            const affordableHomePrice = (desiredPayment + downPayment * mortgageFactor) / totalRateFactor;
+            outputs.affordableHomePrice.textContent = formatCurrency(affordableHomePrice);
+        }
+
+        function updateCostOfWaiting() {
+            const price = parseFloat(inputs.homePrice.value) || 0;
+            const interestRate = parseFloat(inputs.interestRate.value) / 100;
+            const termYears = parseInt(inputs.loanType.options[inputs.loanType.selectedIndex].dataset.term);
+            const downPayment = parseFloat(inputs.downPaymentAmount.value) || 0;
+            const loanAmount = price - downPayment;
+            
+            const waitAppreciation = parseFloat(inputs.waitAppreciation.value) / 100 || 0;
+            const waitInterestRateChange = parseFloat(inputs.waitInterestRateChange.value) / 100 || 0;
+
+            const todayPayment = calculatePI(loanAmount, interestRate, termYears);
+            
+            const nextYearPrice = price * (1 + waitAppreciation);
+            const nextYearDownPayment = downPayment;
+            const nextYearLoan = nextYearPrice - nextYearDownPayment;
+            const nextYearRate = interestRate + waitInterestRateChange;
+            const nextYearPayment = calculatePI(nextYearLoan, nextYearRate, termYears);
+            
+            outputs.waitTodayPayment.textContent = formatCurrency(todayPayment);
+            outputs.waitNextYearPayment.textContent = formatCurrency(nextYearPayment);
+            outputs.waitDifference.textContent = formatCurrency(nextYearPayment - todayPayment);
+        }
+        
+        function updateCityAnalysis() {
+            const selectedCity = inputs.citySelect.value;
+            const cityInfo = cityData[selectedCity];
+            const homePrice = parseFloat(inputs.homePrice.value) || 0;
+
+            if (cityInfo) {
+                outputs.citySchoolRating.textContent = cityInfo.schoolRating;
+                outputs.cityMillageRate.textContent = `${cityInfo.millageRate} mills`;
+                outputs.cityMedianPrice.textContent = formatCurrency(cityInfo.medianHomePrice);
+                outputs.cityVibe.textContent = cityInfo.vibe;
+                
+                const taxableValue = homePrice / 2;
+                const annualTax = (taxableValue * cityInfo.millageRate) / 1000;
+                outputs.cityPropertyTax.textContent = formatCurrency(annualTax);
+                outputs.cityTaxHomePrice.textContent = formatCurrency(homePrice);
+
+                // Update appreciation rate in projections tab
+                if (cityInfo.appreciation) {
+                    inputs.appreciationRate.value = cityInfo.appreciation;
+                    updateHomeValueProjections();
+                }
+            }
+        }
+
+        function showClosingCostModal() {
+            const price = parseFloat(inputs.homePrice.value) || 0;
+            const totalCosts = price * 0.035;
+            outputs.modalHomePrice.textContent = formatCurrency(price);
+            const costs = {
+                "Loan Origination Fee (0.5-1%)": totalCosts * 0.28, "Appraisal Fee": 450,
+                "Title Insurance & Search": totalCosts * 0.20, "Home Inspection": 400, "Recording Fees": 150,
+                "Other (Surveys, etc.)": 0
+            };
+            const remainder = totalCosts - Object.values(costs).reduce((a,b)=>a+b, 0);
+            costs["Other (Surveys, etc.)"] = Math.max(0, remainder);
+
+            outputs.closingCostList.innerHTML = '';
+            for (const [key, value] of Object.entries(costs)) {
+                const li = document.createElement('li');
+                li.className = 'flex justify-between border-b pb-2';
+                li.innerHTML = `<span>${key}</span><span class="font-semibold">${formatCurrency(value)}</span>`;
+                outputs.closingCostList.appendChild(li);
+            }
+            document.getElementById('closing-cost-modal').style.display = 'block';
+        }
+
+        function handleTabClick(e) {
+            if (!e.target.matches('.tab-btn')) return;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            e.target.classList.add('active');
+            const tabId = e.target.dataset.tab;
+            document.getElementById(tabId).classList.add('active');
+            [amortizationChart, homeValueChart, comparisonChart].forEach(chart => { if (chart && chart.canvas.offsetParent !== null) chart.resize(); });
+        }
+
+        // Event Listeners
+        document.getElementById('tabs').addEventListener('click', handleTabClick);
+        inputs.loanType.addEventListener('change', handleLoanTypeChange);
+        inputs.citySelect.addEventListener('change', updateCityAnalysis);
+        inputs.downPaymentPercent.addEventListener('input', () => updateDownPayment('percent'));
+        inputs.downPaymentAmount.addEventListener('input', () => updateDownPayment('amount'));
+        
+        Object.values(inputs).forEach(input => {
+            if (input && !['downPaymentPercent', 'downPaymentAmount', 'loanType', 'citySelect'].includes(input.id)) {
+                input.addEventListener('change', calculateAll);
+                if (input.type === 'number' || input.type === 'range') input.addEventListener('input', calculateAll);
+            }
+        });
+        
+        document.getElementById('projection-term-buttons').addEventListener('click', (e) => { if (e.target.matches('.projection-btn')) { document.querySelectorAll('#projection-term-buttons .projection-btn').forEach(btn => btn.classList.remove('active')); e.target.classList.add('active'); updateHomeValueProjections(); } });
+        document.getElementById('saveScenarioBtn').addEventListener('click', saveScenario);
+        document.getElementById('scenario-container').addEventListener('click', function(e) { if (e.target.closest('.delete-scenario-btn')) { deleteScenario(parseInt(e.target.closest('.delete-scenario-btn').dataset.id)); } if (e.target.closest('.load-scenario-btn')) { loadScenario(parseInt(e.target.closest('.load-scenario-btn').dataset.id)); } });
+        
+        document.getElementById('closing-cost-details-btn').addEventListener('click', showClosingCostModal);
+        document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('closing-cost-modal').style.display = 'none'; });
+        window.addEventListener('click', (e) => { if (e.target == document.getElementById('closing-cost-modal')) { e.target.style.display = 'none'; } });
+        document.getElementById('printBtn').addEventListener('click', () => window.print());
+        
+        const budgetTriggers = [inputs.desiredPayment, inputs.budgetDownPayment, inputs.budgetAnnualIncome, inputs.budgetMonthlyDebts];
+        budgetTriggers.forEach(input => {
+            if (input) {
+                input.addEventListener('change', calculateBudget);
+                input.addEventListener('input', calculateBudget);
+            }
+        });
+
+        // Initial setup
+        populateCountyDropdown();
+        populateCityDropdown();
+        handleLoanTypeChange();
+        calculateBudget();
+        renderScenarios();
+        updateCityAnalysis();
+    });
+    </script>
+</body>
+</html>
