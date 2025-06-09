@@ -446,6 +446,10 @@
                                 <span class="text-slate-600">Total Insurance:</span>
                                 <span id="projInsurance" class="font-semibold text-slate-900">$0</span>
                             </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">Total HOA Fees:</span>
+                                <span id="projHoa" class="font-semibold text-slate-900">$0</span>
+                            </div>
                              <div class="flex justify-between items-center text-sm">
                                 <span class="text-slate-600">Total Maintenance:</span>
                                 <span id="projMaintenance" class="font-semibold text-slate-900">$0</span>
@@ -529,7 +533,7 @@
                             <li><strong>Projected Value:</strong> Calculated using compound appreciation: `Current Value * (1 + Annual Appreciation Rate) ^ Years`. The appreciation rate is adjustable by the user and defaults to city-specific data when a city is selected in 'Local Analysis'.</li>
                             <li><strong>Total Mortgage Payments:</strong> The total of just your principal and interest payments over the selected time frame.</li>
                             <li><strong>Total Maintenance:</strong> This is an estimate of cumulative upkeep costs, calculated annually against the appreciating value of the home.</li>
-                            <li><strong>Total Cost of Ownership:</strong> A holistic view combining your total mortgage payments, taxes, insurance, and maintenance costs over the projection period.</li>
+                            <li><strong>Total Cost of Ownership:</strong> A holistic view combining your total mortgage payments, taxes, insurance, HOA fees, and maintenance costs over the projection period.</li>
                         </ul>
                     </details>
                 </div>
@@ -586,7 +590,7 @@
         };
         
         const inputs = { homePrice: document.getElementById('homePrice'), downPaymentPercent: document.getElementById('downPaymentPercent'), downPaymentAmount: document.getElementById('downPaymentAmount'), loanType: document.getElementById('loanType'), interestRate: document.getElementById('interestRate'), annualIncome: document.getElementById('annualIncome'), netMonthlyIncome: document.getElementById('netMonthlyIncome'), monthlyDebts: document.getElementById('monthlyDebts'), creditScore: document.getElementById('creditScore'), county: document.getElementById('county'), insuranceRate: document.getElementById('insuranceRate'), hoaFees: document.getElementById('hoaFees'), extraPayment: document.getElementById('extraPayment'), biweeklyPayments: document.getElementById('biweeklyPayments'), appreciationRate: document.getElementById('appreciationRate'), maintenanceRate: document.getElementById('maintenanceRate'), desiredPayment: document.getElementById('desiredPayment'), budgetDownPayment: document.getElementById('budgetDownPayment'), budgetAnnualIncome: document.getElementById('budgetAnnualIncome'), budgetMonthlyDebts: document.getElementById('budgetMonthlyDebts'), waitAppreciation: document.getElementById('waitAppreciation'), waitInterestRateChange: document.getElementById('waitInterestRateChange'), citySelect: document.getElementById('citySelect') };
-        const outputs = { downPaymentPercentValue: document.getElementById('downPaymentPercentValue'), totalMonthlyPayment: document.getElementById('totalMonthlyPayment'), housingRatio: document.getElementById('housingRatio'), debtRatio: document.getElementById('debtRatio'), ramseyRatio: document.getElementById('ramseyRatio'), housingRatioCard: document.getElementById('housingRatioCard'), debtRatioCard: document.getElementById('debtRatioCard'), ramseyRatioCard: document.getElementById('ramseyRatioCard'), upfrontDownPayment: document.getElementById('upfrontDownPayment'), closingCosts: document.getElementById('closingCosts'), cashToClose: document.getElementById('cashToClose'), executiveSummary: document.getElementById('executiveSummary'), standardPayoffRow: document.getElementById('standardPayoffRow'), acceleratedPayoffRow: document.getElementById('acceleratedPayoffRow'), projCurrentValue: document.getElementById('projCurrentValue'), projProjectedValue: document.getElementById('projProjectedValue'), projAppreciation: document.getElementById('projAppreciation'), projMortgage: document.getElementById('projMortgage'), projTaxes: document.getElementById('projTaxes'), projInsurance: document.getElementById('projInsurance'), projMaintenance: document.getElementById('projMaintenance'), projTotalCost: document.getElementById('projTotalCost'), homeValueChartTitle: document.getElementById('homeValueChartTitle'), armInfo: document.getElementById('arm-info'), armProjectionInfo: document.getElementById('arm-projection-info'), armProjectionText: document.getElementById('armProjectionText'), affordableHomePrice: document.getElementById('affordableHomePrice'), waitTodayPayment: document.getElementById('waitTodayPayment'), waitNextYearPayment: document.getElementById('waitNextYearPayment'), waitDifference: document.getElementById('waitDifference'), modalHomePrice: document.getElementById('modal-home-price'), closingCostList: document.getElementById('closing-cost-list'), citySchoolRating: document.getElementById('citySchoolRating'), cityMillageRate: document.getElementById('cityMillageRate'), cityMedianPrice: document.getElementById('cityMedianPrice'), cityVibe: document.getElementById('cityVibe'), cityPropertyTax: document.getElementById('cityPropertyTax'), cityTaxHomePrice: document.getElementById('cityTaxHomePrice') };
+        const outputs = { downPaymentPercentValue: document.getElementById('downPaymentPercentValue'), totalMonthlyPayment: document.getElementById('totalMonthlyPayment'), housingRatio: document.getElementById('housingRatio'), debtRatio: document.getElementById('debtRatio'), ramseyRatio: document.getElementById('ramseyRatio'), housingRatioCard: document.getElementById('housingRatioCard'), debtRatioCard: document.getElementById('debtRatioCard'), ramseyRatioCard: document.getElementById('ramseyRatioCard'), upfrontDownPayment: document.getElementById('upfrontDownPayment'), closingCosts: document.getElementById('closingCosts'), cashToClose: document.getElementById('cashToClose'), executiveSummary: document.getElementById('executiveSummary'), standardPayoffRow: document.getElementById('standardPayoffRow'), acceleratedPayoffRow: document.getElementById('acceleratedPayoffRow'), projCurrentValue: document.getElementById('projCurrentValue'), projProjectedValue: document.getElementById('projProjectedValue'), projAppreciation: document.getElementById('projAppreciation'), projMortgage: document.getElementById('projMortgage'), projTaxes: document.getElementById('projTaxes'), projInsurance: document.getElementById('projInsurance'), projHoa: document.getElementById('projHoa'), projMaintenance: document.getElementById('projMaintenance'), projTotalCost: document.getElementById('projTotalCost'), homeValueChartTitle: document.getElementById('homeValueChartTitle'), armInfo: document.getElementById('arm-info'), armProjectionInfo: document.getElementById('arm-projection-info'), armProjectionText: document.getElementById('armProjectionText'), affordableHomePrice: document.getElementById('affordableHomePrice'), waitTodayPayment: document.getElementById('waitTodayPayment'), waitNextYearPayment: document.getElementById('waitNextYearPayment'), waitDifference: document.getElementById('waitDifference'), modalHomePrice: document.getElementById('modal-home-price'), closingCostList: document.getElementById('closing-cost-list'), citySchoolRating: document.getElementById('citySchoolRating'), cityMillageRate: document.getElementById('cityMillageRate'), cityMedianPrice: document.getElementById('cityMedianPrice'), cityVibe: document.getElementById('cityVibe'), cityPropertyTax: document.getElementById('cityPropertyTax'), cityTaxHomePrice: document.getElementById('cityTaxHomePrice') };
         
         let paymentChart, amortizationChart, homeValueChart, comparisonChart;
         let scenarios = JSON.parse(localStorage.getItem('scenarios')) || [];
@@ -806,6 +810,7 @@
              const interestRate = parseFloat(inputs.interestRate.value) / 100;
              const countyRate = michiganCountyTaxRates[inputs.county.value] || 0;
              const monthlyPI = calculatePI(loanAmount, interestRate, termYears);
+             const hoaFees = parseFloat(inputs.hoaFees.value) || 0;
 
              const valueData = [];
              let totalMaintenance = 0, totalInsurance = 0;
@@ -818,12 +823,12 @@
                    totalInsurance += prevYearVal * insuranceRate;
                 }
              }
-
+             const totalHoa = hoaFees * 12 * projectionYears;
              const projectedValueFinal = valueData[valueData.length-1];
              const totalAppreciation = projectedValueFinal - homePrice;
              const totalMortgagePayments = monthlyPI * 12 * Math.min(projectionYears, termYears);
              const totalTaxes = (homePrice * countyRate) * projectionYears;
-             const totalCost = totalMortgagePayments + totalTaxes + totalInsurance + totalMaintenance;
+             const totalCost = totalMortgagePayments + totalTaxes + totalInsurance + totalMaintenance + totalHoa;
 
              outputs.projCurrentValue.textContent = formatCurrency(homePrice);
              outputs.projProjectedValue.textContent = formatCurrency(projectedValueFinal);
@@ -831,6 +836,7 @@
              outputs.projMortgage.textContent = formatCurrency(totalMortgagePayments);
              outputs.projTaxes.textContent = formatCurrency(totalTaxes);
              outputs.projInsurance.textContent = formatCurrency(totalInsurance);
+             outputs.projHoa.textContent = formatCurrency(totalHoa);
              outputs.projMaintenance.textContent = formatCurrency(totalMaintenance);
              outputs.projTotalCost.textContent = formatCurrency(totalCost);
              outputs.homeValueChartTitle.textContent = `Home Value Projection (${projectionYears} Years)`;
